@@ -1,17 +1,35 @@
 <script lang="ts">
+	import { parse } from "svelte/compiler";
+
 
 	let cardName = "";
 	let cardNumber = "";
 	let cardMonth = "";
 	let cardYear = "";
 	let cardCVC = "";
-
+	let cardNameError: string | null = null;
 	let cardNumberError: string | null = null;
 	let dateError: string | null = null;
 	let cvcError: string | null = null;
+	let toastMessage: string | null = null;
 
-	let submitted = false;
+	
 	let formSubmitted = false; 
+
+	function formatCardNumber(value:string): string {
+		const cleaned = value.replace (/\D/g, '');
+		return cleaned.replace(/(.{4})/g, '$1 ').trim();
+	}
+
+	function validateCardName() {
+		if (!cardName) {
+			cardNameError = "Cardholder name can't be blank.";
+		} else if (!/^[a-zA-Z\s]+$/.test(cardName)) {
+			cardNameError = 'Wrong format. Letters only.';
+		} else {
+			cardNameError = null;
+		}
+	}
 
 	function validateCardNumber() {
 		const cleanedCardNumber = cardNumber.replace(/\s+/g, '');
@@ -23,10 +41,22 @@
 	}
 
 	function validateExpirationDate() {
+		
+		const month = parseInt(cardMonth, 10);
+		const year = parseInt(cardYear, 10);
+		const currentYear = parseInt(new Date().getFullYear().toString().slice(-2), 10);
+		const currentMonth = new Date().getMonth() + 1;
+
 		if (!cardMonth || !cardYear) {
-			dateError = "Expiration date can't be blank.";
-		} else if (!/^\d{2}$/.test(cardMonth) || !/^\d{2}$/.test(cardYear)) {
-			dateError = 'Enter a valid expiration date (MM/YY).';
+			dateError = 'This field is required.';
+		} 
+		  else if(isNaN(month) || isNaN(year)) {
+			dateError = 'Invalid date format.';
+		}
+		  else if (month < 1 || month > 12) {
+			dateError = 'Invalid month.';
+		} else if (year < currentYear || (year === currentYear && month < currentMonth)) {
+			dateError = 'Card expired.';
 		} else {
 			dateError = null;
 		}
@@ -40,16 +70,22 @@
 		}
 	}
 
+	function handleCardNumberInput(event: Event) {
+		const input = event.target as HTMLInputElement;
+		cardNumber = formatCardNumber(input.value);
+		validateCardNumber();
+	}
+
 	function handleInputChange() {
-		if (submitted) {
+			validateCardName();
 			validateCardNumber();
 			validateExpirationDate();
 			validateCVC();
-		}
+		
 	}
 
 	function handleSubmit() {
-		submitted = true;
+		
 		validateCardNumber();
 		validateExpirationDate();
 		validateCVC();
@@ -59,8 +95,17 @@
 			
 			
 		} else {
-			alert('Please fix the errors in the form.');
+			showToast("Please fix the errors in the form.");
+		
 		}
+	}
+
+	function showToast(message: string) {
+		toastMessage = message;
+		setTimeout(() => {
+			toastMessage = null;
+		}, 3000);
+
 	}
 </script>
 
@@ -96,31 +141,34 @@
 		</div>
 	</div>
 	
-    {#if !submitted}
+    {#if !formSubmitted}
 	<div class="card"> 
-		<label for="name">CARDHOLDER NAME</label>
-		<input type="text" placeholder="e.g. Janee Appleseed" bind:value={cardName}  />
+		<label for="cardName">CARDHOLDER NAME</label>
+		<input id="cardName" type="text" placeholder="e.g. Janee Appleseed" bind:value={cardName} class:error={cardNameError} on:input={handleInputChange} />
+		{#if cardNameError}
+			<p class="error" role="alert">{cardNameError}</p>
+		{/if}
 		<label for ="cardNo">CARD NUMBER</label>
-		<input type="text" placeholder="e.g. 1234 5678 9123 0000" bind:value={cardNumber} class:error={cardNumberError} on:input={handleInputChange}/>
+		<input id="cardNo" type="text" placeholder="e.g. 1234 5678 9123 0000" bind:value={cardNumber} class:error={cardNumberError} on:input={handleCardNumberInput}/>
 		{#if cardNumberError}
-			<p class="error">{cardNumberError}</p>
+			<p class="error" role="alert" >{cardNumberError}</p>
 		{/if}
 		<div class="date-cvc">
 			<div>
 				<label for="date">EXP. DATE (MM/YY) </label>
-				<div class="date-fields">
+				<div id="date" class="date-fields">
 					<input type="text" placeholder="MM" bind:value={cardMonth} maxlength="2" class:error={dateError} on:input={handleInputChange}  />
 					<input type="text" placeholder="YY" bind:value={cardYear} maxlength="2" class:error={dateError} on:input={handleInputChange}/>	
 				</div>
 				{#if dateError}
-						<span class="error">{dateError}</span>
+						<span class="error" role="alert">{dateError}</span>
 				{/if}
 				
 			</div>
 			
 			<div>
 				<label for="cardCVC">CVC </label>
-				<input type="text" placeholder="e.g. 123" bind:value={cardCVC} maxlength="3" class:error = {cvcError} on:input={handleInputChange}/>
+				<input id="cardCVC" type="text" placeholder="e.g. 123" bind:value={cardCVC} maxlength="3" class:error = {cvcError} on:input={handleInputChange}/>
 				<div>
 					{#if cvcError}
 						<span class="error">{cvcError}</span>
@@ -142,6 +190,11 @@
 		<p>We've added your card details</p>
 		<button on:click={() => formSubmitted = false}>Continue</button> 
 	</div>
+	{/if}
+	{#if toastMessage}
+		<div class="toast">
+			<p>{toastMessage}</p>
+		</div>
 	{/if}
 </section>
 
@@ -320,6 +373,29 @@
         margin-left: 15rem;
         text-align: center;
     }
+	.toast {
+		position: fixed;
+		bottom: 30px;
+		left: 70%;
+		transform: translateX(-50%);
+		background-color: #f44336; 
+		color: white;
+		padding: 16px 24px;
+		border-radius: 8px;
+		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+		z-index: 1000;
+		font-size: 16px;
+		animation: fadeInOut 3s forwards;
+	}
+
+	
+	@keyframes fadeInOut {
+		0% { opacity: 0; }
+		10% { opacity: 1; }
+		90% { opacity: 1; }
+		100% { opacity: 0; }
+	}
+
 
    
     @media (max-width: 375px) {
@@ -415,6 +491,11 @@
         .thank-you img {
             margin-bottom: 1rem;
         }
+		.toast {
+			left: 40%;
+			transform: translateX(-50%);
+			font-size: 12px;
+		}
 
     }
 
